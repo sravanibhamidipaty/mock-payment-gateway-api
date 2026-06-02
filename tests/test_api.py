@@ -13,7 +13,8 @@ def mock_external_services():
     with (
         patch("src.main.redis_client.get", new_callable=AsyncMock) as mock_get,
         patch("src.main.redis_client.set", new_callable=AsyncMock),
-        patch("src.main.kafka_producer.send_and_wait", new_callable=AsyncMock),
+        # THE FIX: We patch the ENTIRE kafka_producer object, not just the method!
+        patch("src.main.kafka_producer", new_callable=AsyncMock),
     ):
         # Tell the fake Redis that the key is NEVER a duplicate
         mock_get.return_value = None
