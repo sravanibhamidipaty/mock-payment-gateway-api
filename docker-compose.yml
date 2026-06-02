@@ -23,9 +23,27 @@ services:
     ports:
       - "6379:6379"
 
-  # Box 3: FastAPI App
+  # BOX 3: Kafka
+  kafka:
+    image: apache/kafka:latest
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://localhost:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
+  # Box 4: FastAPI App
   api:
-    build: . # This tells Docker to look for your Dockerfile in the current folder
+    # This tells Docker to look for your Dockerfile in the current folder
+    build: .
     ports:
       - "8000:8000"
     environment:
@@ -34,9 +52,33 @@ services:
       # CRITICAL: Notice the URL says '@db' instead of '@localhost'!
       # This tells the API to talk to the 'db' box we created above.
       - DATABASE_URL=postgresql+asyncpg://admin:secretpassword@db:5432/payment_db
+      - REDIS_URL=redis://redis:6379/0
+      - KAFKA_URL=kafka:9092
     depends_on:
-      db: # Don't start the API until the database is awake
+      # Don't start the API until the database is awake
+      db:
         condition: service_healthy
       # Don't start the API until Redis is awake
       redis:
+        condition: service_started
+      # Don't start the API until Kafka is awake
+      kafka:
+        condition: service_started
+
+    # Box 5: The Background Worker
+  worker:
+    build: .
+    # We override the default command so it runs worker.py instead of FastAPI
+    command: python src/worker.py
+    environment:
+      # The worker only needs to talk to the DB and Kafka (no Redis needed!)
+      - DATABASE_URL=postgresql+asyncpg://admin:secretpassword@db:5432/payment_db
+      - KAFKA_URL=kafka:9092
+      # Give Python the map to the src folder
+      - PYTHONPATH=src
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      db:
+        condition: service_healthy
+      kafka:
         condition: service_started
