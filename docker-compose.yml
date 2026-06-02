@@ -17,7 +17,13 @@ services:
       timeout: 2s
       retries: 5
 
-  # BOX 2: Your FastAPI App
+  # BOX 2: The Bouncer Redis
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  # Box 3: FastAPI App
   api:
     build: . # This tells Docker to look for your Dockerfile in the current folder
     ports:
@@ -31,3 +37,6 @@ services:
     depends_on:
       db: # Don't start the API until the database is awake
         condition: service_healthy
+      # Don't start the API until Redis is awake
+      redis:
+        condition: service_started

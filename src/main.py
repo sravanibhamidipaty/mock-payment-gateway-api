@@ -8,10 +8,15 @@ from typing import List
 from sqlalchemy import select
 import os
 from dotenv import load_dotenv
+import redis.asyncio as redis
 
 load_dotenv()
 
 app = FastAPI(description="Mock Payment Gateway API")
+
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+# decode_responses=True ensures we get clean strings back, not raw bytes
+redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 
 def verify_api_key(x_api_key: str = Header(..., description="API Key for Authorization")):
     # Step 2: Check if it matches our secret
@@ -44,6 +49,15 @@ async def create_charge(
         idempotency_key: str = Header(..., description="Unique hash to prevent double charges"),
         db: AsyncSession = Depends(get_db),
 ):
+
+    # We check memory before we ever touch the database.
+    is_duplicate = await redis_client.get(idempotency_key)
+    if is_duplicate:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Idempotency Key '{idempotency_key}' has already been used. (Caught by Redis!)",
+        )
+
     try:
         # 1. Translate the Pydantic Request into a SQLALchemy Database Model
         new_charge = models.Charge(
@@ -58,6 +72,9 @@ async def create_charge(
         await db.commit()
         await db.refresh(new_charge) # Refreshes to get the auto-generated ID and created_at
 
+        # The database finished! Tell Redis to remember this key for 24 hours (86400 seconds)
+        await redis_client.set(idempotency_key, "processed", ex=86400)
+
         # 3. Return the newly saved row!
         return new_charge
 
@@ -68,7 +85,7 @@ async def create_charge(
         # Now, raise the FastAPI HTTP Exception to tell the user!
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Idempotency Key '{idempotency_key}' has already been used.",
+            detail=f"Idempotency Key '{idempotency_key}' has already been used. (Caught by DB)",
         )
 
 @app.get("/users/{user_id}/charges", response_model=List[ChargeResponse], dependencies=[Depends(verify_api_key)])

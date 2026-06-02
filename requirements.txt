@@ -22,3 +22,4 @@ websockets==16.0
 pytest
 httpx
 pytest-asyncio
+redis
