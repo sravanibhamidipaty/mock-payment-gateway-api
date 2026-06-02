@@ -15,6 +15,7 @@ jobs:
   test:
     # Rent a standard Ubuntu Linux computer
     runs-on: ubuntu-latest
+
     # Tell GitHub to spin up a Postgres database just for this job!
     services:
       postgres:
@@ -24,11 +25,12 @@ jobs:
           POSTGRES_PASSWORD: secretpassword
           POSTGRES_DB: payment_db
         ports:
-          # We map it to 5433 to exactly match the fallback URL in your database.py!
-          - "5433:5432"
+          # In the cloud, the standard port 5432 is always free!
+          - "5432:5432"
         # Give it a beeper so GitHub knows when the DB is ready
+        # THE FIX: We explicitly tell the beeper to use the 'admin' user and 'payment_db'
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U admin -d payment_db"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -56,5 +58,6 @@ jobs:
       - name: Run Pytest
         env:
           API_KEY_SECRET: ${{ secrets.API_KEY_SECRET }}
-          DATABASE_URL: postgresql+asyncpg://admin:secretpassword@localhost:5433/payment_db
+          # Notice we changed the URL back to 5432 here as well!
+          DATABASE_URL: postgresql+asyncpg://admin:secretpassword@localhost:5432/payment_db
         run: pytest
