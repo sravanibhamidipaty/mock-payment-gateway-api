@@ -1,0 +1,40 @@
+name: API Tests
+
+# 1. When should this robot run?
+# Answer: Every time code is pushed to the 'main' branch
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+# 2. What jobs should the robot do?
+jobs:
+  test:
+    # Rent a standard Ubuntu Linux computer
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step A: Download the code from the repository
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Step B: Install Python on the machine
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          # This caches dependencies so future tests run lightning fast!
+          cache: "pip"
+
+      # Step C: Install your project's requirements
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Step D: Run the exact same Pytest command you run locally!
+      - name: Run Pytest
+        run: pytest
