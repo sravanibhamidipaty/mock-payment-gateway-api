@@ -15,6 +15,23 @@ jobs:
   test:
     # Rent a standard Ubuntu Linux computer
     runs-on: ubuntu-latest
+    # Tell GitHub to spin up a Postgres database just for this job!
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: admin
+          POSTGRES_PASSWORD: secretpassword
+          POSTGRES_DB: payment_db
+        ports:
+          # We map it to 5433 to exactly match the fallback URL in your database.py!
+          - "5433:5432"
+        # Give it a beeper so GitHub knows when the DB is ready
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       # Step A: Download the code from the repository
