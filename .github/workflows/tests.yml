@@ -54,6 +54,25 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # Step C.5: Manually trigger the database table creation
+      - name: Create Database Tables
+        env:
+          DATABASE_URL: postgresql+asyncpg://admin:secretpassword@localhost:5432/payment_db
+          # Give Python the map to the src folder just like Pytest has
+          PYTHONPATH: src
+        run: |
+          python -c '
+          import asyncio
+          from database import engine, Base
+          import models
+          
+          async def setup_db():
+              async with engine.begin() as conn:
+                  await conn.run_sync(Base.metadata.create_all)
+                  
+          asyncio.run(setup_db())
+          '
+
       # Step D: Run the exact same Pytest command you run locally!
       - name: Run Pytest
         env:
