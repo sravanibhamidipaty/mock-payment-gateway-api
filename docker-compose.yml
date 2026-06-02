@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  # BOX 1: The Database
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: secretpassword
+      POSTGRES_DB: payment_db
+    ports:
+      - "5433:5432"
+    healthcheck:
+      # This pings the database to ask "Are you ready?"
+      test: ["CMD-SHELL", "pg_isready -U admin -d payment_db"]
+      interval: 2s
+      timeout: 2s
+      retries: 5
+
+  # BOX 2: Your FastAPI App
+  api:
+    build: . # This tells Docker to look for your Dockerfile in the current folder
+    ports:
+      - "8000:8000"
+    environment:
+      # We pass the secret key directly into the vault
+      - API_KEY_SECRET=sk_test_12345
+      # CRITICAL: Notice the URL says '@db' instead of '@localhost'!
+      # This tells the API to talk to the 'db' box we created above.
+      - DATABASE_URL=postgresql+asyncpg://admin:secretpassword@db:5432/payment_db
+    depends_on:
+      db: # Don't start the API until the database is awake
+        condition: service_healthy

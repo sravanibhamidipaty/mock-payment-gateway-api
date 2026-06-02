@@ -1,8 +1,13 @@
+import os
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import declarative_base
 
-# Format: postgresql+asyncpg://user:password@host:port/database_name
-DATABASE_URL = "postgresql+asyncpg://my_db_user:supersecret@localhost:5432/payment_gateway"
+# 1. Grab the URL from the environment (Docker will inject this!)
+# 2. If it doesn't exist (like when running locally), fallback to the localhost version.
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql+asyncpg://admin:secretpassword@localhost:5433/payment_db"
+)
 
 # The engine is the core connection to the database
 # echo=True prints the generated SQL to your terminal (great for debugging!)
