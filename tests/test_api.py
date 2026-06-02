@@ -2,7 +2,22 @@ import pytest
 import uuid
 from httpx import AsyncClient, ASGITransport
 from src.main import app  # Import your actual FastAPI app
+from unittest.mock import AsyncMock, patch
 
+@pytest.fixture(autouse=True)
+def mock_external_services():
+    """
+    This intercepts any calls to Redis and Kafka during tests and replaces them
+    with a fake "AsyncMock" that always succeeds instantly!
+    """
+    with (
+        patch("src.main.redis_client.get", new_callable=AsyncMock) as mock_get,
+        patch("src.main.redis_client.set", new_callable=AsyncMock),
+        patch("src.main.kafka_producer.send_and_wait", new_callable=AsyncMock),
+    ):
+        # Tell the fake Redis that the key is NEVER a duplicate
+        mock_get.return_value = None
+        yield
 
 # ==========================================
 # TEST 1: The Missing Key (Front Gate 422)
@@ -48,7 +63,7 @@ async def test_vip_pass_succeeds():
 
 
 # ==========================================
-# TEST 4: Create Charge (Idempotency 200)
+# TEST 4: Create Charge (Idempotency 202)
 # ==========================================
 @pytest.mark.asyncio
 async def test_create_charge_success():
@@ -66,4 +81,7 @@ async def test_create_charge_success():
             json=payload,
         )
 
-    assert response.status_code == 200
+    # We expect a 202 Accepted now that we are using the Conveyor Belt!
+    assert response.status_code == 202
+    # Let's also verify it sends the correct JSON message
+    assert response.json()["status"] == "processing"
