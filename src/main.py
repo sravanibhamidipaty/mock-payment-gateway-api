@@ -6,8 +6,27 @@ from database import get_db, engine, Base
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from sqlalchemy import select
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI(description="Mock Payment Gateway API")
+
+def verify_api_key(x_api_key: str = Header(..., description="API Key for Authorization")):
+    # Step 2: Check if it matches our secret
+    real_secret = os.getenv("API_KEY_SECRET")
+    if x_api_key != real_secret:
+        # Step 3 & 4 The Rejection
+        # We don't return a JSON, we RAISE an exception.
+        # FastAPI catches this and automatically builds the 401 JSON for the user!
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API Key. You aren't allowed here."
+        )
+
+    # If it matches, Python just skips the 'if' block and finishes the function.
+    # That means "Access Granted!"
 
 @app.on_event("startup")
 async def startup_event():
@@ -16,14 +35,14 @@ async def startup_event():
         await conn.run_sync(Base.metadata.create_all)
     print("--- Database initialized and tables created!")
 
-@app.post("/users/{user_id}/charges")
+@app.post("/users/{user_id}/charges", dependencies=[Depends(verify_api_key)])
 async def create_charge(
         user_id: int,
         charge_request: ChargeRequest,
         # We use Header(...) to make it required.
         # FastAPI automatically converts 'idempotency_key' to the HTTP standard 'Idempotency-Key'
         idempotency_key: str = Header(..., description="Unique hash to prevent double charges"),
-        db: AsyncSession = Depends(get_db)
+        db: AsyncSession = Depends(get_db),
 ):
     try:
         # 1. Translate the Pydantic Request into a SQLALchemy Database Model
@@ -52,7 +71,7 @@ async def create_charge(
             detail=f"Idempotency Key '{idempotency_key}' has already been used.",
         )
 
-@app.get("/users/{user_id}/charges", response_model=List[ChargeResponse])
+@app.get("/users/{user_id}/charges", response_model=List[ChargeResponse], dependencies=[Depends(verify_api_key)])
 async def get_user_charges(user_id: int, db: AsyncSession = Depends(get_db)):
     query = select(models.Charge).where(models.Charge.user_id == user_id)
     result = await db.execute(query)
