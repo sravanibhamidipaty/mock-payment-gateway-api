@@ -54,4 +54,7 @@ jobs:
 
       # Step D: Run the exact same Pytest command you run locally!
       - name: Run Pytest
+        env:
+          API_KEY_SECRET: ${{ secrets.API_KEY_SECRET }}
+          DATABASE_URL: postgresql+asyncpg://admin:secretpassword@localhost:5433/payment_db
         run: pytest
