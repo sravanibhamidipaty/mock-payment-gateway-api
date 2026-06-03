@@ -4,7 +4,7 @@ An **event-driven, asynchronous payment processing system** built with Python an
 
 This isn't a CRUD app. It demonstrates the patterns that matter when correctness is non-negotiable: **idempotency**, **decoupled async processing via a message broker**, **at-least-once delivery with a background worker**, and **service-to-service webhooks** — all containerized and covered by CI.
 
-[![API Tests](https://github.com/sravanib04/mock-payment-gateway-api/actions/workflows/tests.yml/badge.svg)](https://github.com/sravanib04/mock-payment-gateway-api/actions/workflows/tests.yml)
+[![API Tests](https://github.com/sravanibhamidipaty/mock-payment-gateway-api/actions/workflows/tests.yml/badge.svg)](https://github.com/sravanibhamidipaty/mock-payment-gateway-api/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/Python-3.12-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-async-009688)
 ![Kafka](https://img.shields.io/badge/Kafka-event--driven-231F20)
@@ -183,7 +183,7 @@ No local Python or Postgres needed — just Docker.
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/sravanib04/mock-payment-gateway-api.git
+git clone https://github.com/sravanibhamidipaty/mock-payment-gateway-api.git
 cd mock-payment-gateway-api
 cp .env.example .env   # then fill in your values
 ```
