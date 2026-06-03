@@ -77,8 +77,17 @@ services:
       # Give Python the map to the src folder
       - PYTHONPATH=src
       - PYTHONUNBUFFERED=1
+      - AWS_ENDPOINT_URL=http://floci:4566
+      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
     depends_on:
       db:
         condition: service_healthy
       kafka:
         condition: service_started
+
+  floci:
+    image: floci/floci:latest
+    ports:
+      - "4567:4566"

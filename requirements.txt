@@ -24,3 +24,4 @@ httpx
 pytest-asyncio
 redis
 aiokafka
+aioboto3
