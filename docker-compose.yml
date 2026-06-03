@@ -5,14 +5,14 @@ services:
   db:
     image: postgres:15
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: secretpassword
-      POSTGRES_DB: payment_db
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5433:5432"
     healthcheck:
       # This pings the database to ask "Are you ready?"
-      test: ["CMD-SHELL", "pg_isready -U admin -d payment_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 2s
       timeout: 2s
       retries: 5
@@ -46,14 +46,14 @@ services:
     build: .
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
-      # We pass the secret key directly into the vault
-      - API_KEY_SECRET=sk_test_12345
-      # CRITICAL: Notice the URL says '@db' instead of '@localhost'!
-      # This tells the API to talk to the 'db' box we created above.
-      - DATABASE_URL=postgresql+asyncpg://admin:secretpassword@db:5432/payment_db
-      - REDIS_URL=redis://redis:6379/0
-      - KAFKA_URL=kafka:9092
+      - API_KEY_SECRET=${API_KEY_SECRET}
+      # Built from the POSTGRES_* vars; '@db' points at the db service above.
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - REDIS_URL=${REDIS_URL}
+      - KAFKA_URL=${KAFKA_URL}
     depends_on:
       # Don't start the API until the database is awake
       db:
@@ -70,17 +70,20 @@ services:
     build: .
     # We override the default command so it runs worker.py instead of FastAPI
     command: python src/worker.py
+    env_file:
+      - .env
     environment:
       # The worker only needs to talk to the DB and Kafka (no Redis needed!)
-      - DATABASE_URL=postgresql+asyncpg://admin:secretpassword@db:5432/payment_db
-      - KAFKA_URL=kafka:9092
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - KAFKA_URL=${KAFKA_URL}
+      - NOTIFIER_URL=${NOTIFIER_URL}
       # Give Python the map to the src folder
       - PYTHONPATH=src
       - PYTHONUNBUFFERED=1
-      - AWS_ENDPOINT_URL=http://floci:4566
-      - AWS_DEFAULT_REGION=us-east-1
-      - AWS_ACCESS_KEY_ID=test
-      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_ENDPOINT_URL=${AWS_ENDPOINT_URL}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
     depends_on:
       db:
         condition: service_healthy
@@ -91,3 +94,16 @@ services:
     image: floci/floci:latest
     ports:
       - "4567:4566"
+
+  notifier:
+    build: .
+    command: uvicorn src.notifier:app --host 0.0.0.0 --port 8001
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=src
+      - SENDER_EMAIL=${SENDER_EMAIL}
+      - APP_PASSWORD=${APP_PASSWORD}
+      - RECEIVER_EMAIL=${RECEIVER_EMAIL}

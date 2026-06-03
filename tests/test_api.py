@@ -1,8 +1,16 @@
+import os
 import pytest
 import uuid
+from dotenv import load_dotenv
 from httpx import AsyncClient, ASGITransport
 from src.main import app  # Import your actual FastAPI app
 from unittest.mock import AsyncMock, patch
+
+load_dotenv()
+
+# Pull the valid key from the environment (.env locally, GitHub Secrets in CI)
+# so no real credentials are hardcoded in the test suite.
+API_KEY = os.environ["API_KEY_SECRET"]
 
 @pytest.fixture(autouse=True)
 def mock_external_services():
@@ -57,7 +65,7 @@ async def test_vip_pass_succeeds():
         transport=ASGITransport(app=app), base_url="http://test"
     ) as ac:
         response = await ac.get(
-            "/users/999/charges", headers={"x-api-key": "sk_test_12345"}
+            "/users/999/charges", headers={"x-api-key": API_KEY}
         )
 
     assert response.status_code == 200
@@ -78,7 +86,7 @@ async def test_create_charge_success():
     ) as ac:
         response = await ac.post(
             "/users/999/charges",
-            headers={"x-api-key": "sk_test_12345", "idempotency-key": random_key},
+            headers={"x-api-key": API_KEY, "idempotency-key": random_key},
             json=payload,
         )
 
