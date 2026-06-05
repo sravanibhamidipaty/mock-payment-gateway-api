@@ -4,17 +4,66 @@ import models
 from database import get_db, engine, Base
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
-from sqlalchemy import select
+from sqlalchemy import select, text
 import os
 from dotenv import load_dotenv
 import redis.asyncio as redis
 import json
 from aiokafka import AIOKafkaProducer
 import asyncio
+from fastapi.responses import JSONResponse
+from prometheus_fastapi_instrumentator import Instrumentator
+import structlog
+
+structlog.configure(
+    processors=[
+        structlog.processors.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.JSONRenderer(),
+    ]
+)
+log = structlog.get_logger()
 
 load_dotenv()
 
 app = FastAPI(description="Mock Payment Gateway API")
+
+# Exposes Prometheus metrics at GET /metrics (request count, latency, etc.)
+Instrumentator().instrument(app).expose(app)
+
+
+@app.get("/health", tags=["ops"])
+async def health():
+    """Liveness probe: is the process up?"""
+    return {"status": "ok"}
+
+
+@app.get("/readiness", tags=["ops"])
+async def readiness():
+    """Readiness probe: can we actually serve traffic (deps reachable)?"""
+    checks: dict[str, str] = {}
+
+    try:
+        await redis_client.ping()
+        checks["redis"] = "ok"
+    except Exception:
+        checks["redis"] = "down"
+
+    checks["kafka"] = "ok" if kafka_producer is not None else "down"
+
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        checks["database"] = "ok"
+    except Exception:
+        checks["database"] = "down"
+
+    ready = all(v == "ok" for v in checks.values())
+    return JSONResponse(
+        status_code=200 if ready else 503,
+        content={"ready": ready, "checks": checks},
+    )
+
 
 KAFKA_URL = os.getenv("KAFKA_URL", "kafka:9092")
 kafka_producer = None  # We will turn this on when the server starts

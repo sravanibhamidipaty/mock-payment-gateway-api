@@ -13,6 +13,11 @@ APP_PASSWORD = os.environ["APP_PASSWORD"]
 RECEIVER_EMAIL = os.environ["RECEIVER_EMAIL"]
 
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 @app.post("/webhook")
 async def receive_webhook(request: Request):
     # 1. Safely open the direct webhook from the Worker

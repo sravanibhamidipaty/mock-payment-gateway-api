@@ -14,6 +14,29 @@ KAFKA_URL = os.getenv("KAFKA_URL", "kafka:9092")
 NOTIFIER_URL = os.getenv("NOTIFIER_URL", "http://notifier:8001/webhook")
 
 
+async def process_payment(db, payment_box):
+    """Persist a charge and fire the notification webhook. Testable unit of work."""
+    new_charge = models.Charge(
+        user_id=payment_box["user_id"],
+        amount=payment_box["amount"],
+        currency=payment_box["currency"],
+        idempotency_key=payment_box["idempotency_key"],
+    )
+    db.add(new_charge)
+    await db.commit()
+
+    async with httpx.AsyncClient() as client:
+        await client.post(
+            NOTIFIER_URL,
+            json={
+                "amount": payment_box["amount"],
+                "currency": payment_box["currency"],
+                "user_id": payment_box["user_id"],
+            },
+        )
+    return new_charge
+
+
 async def consume():
     print("⏳ Worker: Waiting 5 seconds for Notifier to boot up...")
     await asyncio.sleep(5)
@@ -42,35 +65,14 @@ async def consume():
             payment_box = msg.value
 
             async with AsyncSession(engine) as db:
-                new_charge = models.Charge(
-                    user_id=payment_box["user_id"],
-                    amount=payment_box["amount"],
-                    currency=payment_box["currency"],
-                    idempotency_key=payment_box["idempotency_key"],
-                )
-                db.add(new_charge)
-
                 try:
-                    await db.commit()
+                    await process_payment(db, payment_box)
                     print(
-                        f"✅ Worker: Successfully saved charge '{payment_box['idempotency_key']}'!"
+                        f"✅ Worker: Saved charge '{payment_box['idempotency_key']}' and fired webhook!\n"
                     )
-
-                    # ---> NEW: DIRECT SERVICE-TO-SERVICE WEBHOOK! <---
-                    async with httpx.AsyncClient() as client:
-                        await client.post(
-                            NOTIFIER_URL,
-                            json={
-                                "amount": payment_box["amount"],
-                                "currency": payment_box["currency"],
-                                "user_id": payment_box["user_id"],
-                            },
-                        )
-                    print("📬 Worker: Fired Direct Webhook to Notifier!\n")
-
-                except Exception as e:
+                except Exception as exc:
                     await db.rollback()
-                    print(f"❌ Worker: Failed to save to database. Error: {e}\n")
+                    print(f"❌ Worker: Failed to process payment. Error: {exc}\n")
 
     finally:
         await consumer.stop()

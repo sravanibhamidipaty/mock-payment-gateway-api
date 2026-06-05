@@ -29,3 +29,6 @@ ruff
 black
 mypy
 pytest-cov
+structlog
+prometheus-fastapi-instrumentator
+testcontainers
