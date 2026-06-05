@@ -171,7 +171,8 @@ sequenceDiagram
 - **🔔 Service-to-service webhooks** — a standalone notifier microservice sends email receipts.
 - **🔐 API-key authentication** enforced via FastAPI dependency injection.
 - **✅ Strict validation** — all payloads validated against Pydantic schemas.
-- **🧪 Automated CI** — async integration tests run on every push and pull request.
+- **📊 Observability** — liveness/readiness probes, dependency health checks, Prometheus metrics, and structured JSON logging.
+- **🧪 Automated CI** — async integration tests (incl. real-Postgres Testcontainers) plus lint/format/type-check gates on every push and pull request.
 - **🔑 12-factor config** — all secrets and endpoints externalized to environment variables, never hardcoded.
 
 ---
@@ -249,6 +250,9 @@ curl http://localhost:8000/users/999/charges -H "x-api-key: $API_KEY_SECRET"
 |--------|----------|------|---------|-------------|
 | `POST` | `/users/{user_id}/charges` | `x-api-key` | `202 Accepted` | Submit a charge for async processing |
 | `GET`  | `/users/{user_id}/charges` | `x-api-key` | `200 OK` | List all charges for a user |
+| `GET`  | `/health` | — | `200 OK` | Liveness probe |
+| `GET`  | `/readiness` | — | `200` / `503` | Readiness probe (checks Redis, Kafka, DB) |
+| `GET`  | `/metrics` | — | `200 OK` | Prometheus metrics |
 
 ### Required Headers
 
@@ -267,6 +271,31 @@ curl http://localhost:8000/users/999/charges -H "x-api-key: $API_KEY_SECRET"
   "description": "Test Charge"
 }
 ```
+
+---
+
+## 📊 Observability
+
+The API ships with the probes and metrics you'd expect to run it under Kubernetes or behind a load balancer.
+
+| Endpoint | Purpose | Behavior |
+|----------|---------|----------|
+| `GET /health` | **Liveness** — "is the process up?" | Always `200` if the app is running. Orchestrators use this to decide whether to **restart** the container. Intentionally does *not* check dependencies. |
+| `GET /readiness` | **Readiness** — "can I serve traffic right now?" | Actively pings Redis, Kafka, and PostgreSQL. Returns `200` when all are healthy, `503` when any dependency is down — so traffic is **held**, not the container killed. |
+| `GET /metrics` | **Metrics** — request counts, latency, status codes | Prometheus exposition format, scraped by a monitoring system. |
+
+**Why two probes?** A transient Kafka outage shouldn't trigger a restart loop (restarting won't bring Kafka back). `/health` stays "alive" so the container isn't killed, while `/readiness` flips to `503` so the load balancer stops sending requests until the dependency recovers.
+
+Example `/readiness` response when a dependency is down:
+
+```json
+{
+  "ready": false,
+  "checks": { "redis": "ok", "kafka": "down", "database": "ok" }
+}
+```
+
+Logs are emitted as structured JSON via [`structlog`](https://www.structlog.org/), so they're ready to ship to any log aggregator (Datadog, Loki, CloudWatch) without parsing.
 
 ---
 
