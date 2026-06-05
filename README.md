@@ -37,7 +37,8 @@ flowchart LR
     API -.->|202 Accepted| Client
     Kafka -->|consume| Worker[Background<br/>Worker]
     Worker -->|persist charge| DB[(PostgreSQL)]
-    Worker -->|webhook| Notifier[Notifier<br/>Microservice]
+    Worker -->|webhook + retry/backoff| Notifier[Notifier<br/>Microservice]
+    Worker -.->|unprocessable| DLQ{{Dead Letter<br/>Queue}}
     Notifier -->|SMTP| Email([📧 Email Receipt])
 ```
 
@@ -168,6 +169,7 @@ sequenceDiagram
 - **🔁 Idempotency protection** via Redis — duplicate `Idempotency-Key`s return `409 Conflict` instantly, never double-charging.
 - **📨 Event-driven processing** — Kafka decouples the API from the database so the write path stays fast and the worker scales independently.
 - **👷 Durable background worker** — consumes events, persists charges transactionally with rollback on failure.
+- **🛟 Resilience** — exponential-backoff retries on the notifier webhook and a **Dead Letter Queue** for messages that can't be processed, so no accepted payment is silently lost. See [`docs/DESIGN.md`](docs/DESIGN.md).
 - **🔔 Service-to-service webhooks** — a standalone notifier microservice sends email receipts.
 - **🔐 API-key authentication** enforced via FastAPI dependency injection.
 - **✅ Strict validation** — all payloads validated against Pydantic schemas.
@@ -311,6 +313,9 @@ All configuration lives in environment variables (see [`.env.example`](.env.exam
 | `REDIS_URL` | Redis connection URL |
 | `KAFKA_URL` | Kafka broker address |
 | `NOTIFIER_URL` | Worker → notifier webhook URL |
+| `MAX_WEBHOOK_RETRIES` | Webhook retry attempts before giving up (default `3`) |
+| `WEBHOOK_BACKOFF_BASE` | Initial backoff in seconds, doubled each retry (default `1.0`) |
+| `DLQ_TOPIC` | Kafka dead-letter topic for unprocessable messages (default `payments.DLQ`) |
 | `SENDER_EMAIL` / `RECEIVER_EMAIL` / `APP_PASSWORD` | SMTP credentials for email receipts |
 | `AWS_*` | LocalStack/Floci endpoint + dummy credentials |
 
@@ -327,7 +332,7 @@ cp .env.example .env
 PYTHONPATH=src pytest
 ```
 
-The suite uses `pytest-asyncio` and `httpx`'s ASGI transport, mocking Redis and Kafka so tests run fast and hermetically. The same suite runs automatically in CI via GitHub Actions.
+The suite combines fast hermetic unit tests (`pytest-asyncio` + `httpx` ASGI transport, with Redis/Kafka mocked) and an integration test that spins up a **real PostgreSQL via [Testcontainers](https://testcontainers.com/)** to verify the worker persists charges and fires webhooks. The Testcontainers test requires a running Docker daemon and skips gracefully without one. The same suite runs automatically in CI via GitHub Actions.
 
 ---
 
@@ -336,17 +341,21 @@ The suite uses `pytest-asyncio` and `httpx`'s ASGI transport, mocking Redis and 
 ```text
 .
 ├── src/
-│   ├── main.py        # FastAPI app: auth, idempotency, Kafka producer
-│   ├── worker.py      # Kafka consumer: persists charges, fires webhooks
-│   ├── notifier.py    # Notification microservice: SMTP email receipts
-│   ├── database.py    # Async SQLAlchemy engine & session management
-│   ├── models.py      # SQLAlchemy ORM models
-│   └── schemas.py     # Pydantic request/response schemas
+│   ├── main.py            # FastAPI app: auth, idempotency, Kafka producer, health/metrics
+│   ├── worker.py          # Kafka consumer: persist, retry-with-backoff webhook, DLQ
+│   ├── notifier.py        # Notification microservice: SMTP email receipts
+│   ├── database.py        # Async SQLAlchemy engine & session management
+│   ├── models.py          # SQLAlchemy ORM models
+│   └── schemas.py         # Pydantic request/response schemas
 ├── tests/
-│   └── test_api.py    # Async integration tests
+│   ├── test_api.py        # Async API integration tests
+│   ├── test_worker.py     # Testcontainers (real Postgres) worker test
+│   └── test_worker_unit.py # Retry/backoff + DLQ unit tests
+├── docs/
+│   └── DESIGN.md          # Architecture decisions & tradeoffs
 ├── .github/workflows/
-│   └── tests.yml      # CI pipeline
-├── docker-compose.yml # 6-service orchestration
+│   └── tests.yml          # CI: tests + coverage + lint/format/type-check
+├── docker-compose.yml     # 6-service orchestration
 ├── Dockerfile
 ├── requirements.txt
 └── .env.example
@@ -357,12 +366,15 @@ The suite uses `pytest-asyncio` and `httpx`'s ASGI transport, mocking Redis and 
 ## 🎯 What This Demonstrates
 
 - Event-driven architecture with a real message broker (Kafka)
-- Idempotent, exactly-once-semantics financial request handling
+- Idempotent, at-least-once financial request handling with layered dedup (Redis + DB constraint)
+- Resilience patterns: retry-with-backoff and a Dead Letter Queue
 - Async Python end-to-end (FastAPI, SQLAlchemy 2.0, asyncpg, aiokafka)
 - Microservice decomposition and service-to-service communication
+- Observability: health/readiness probes, Prometheus metrics, structured logging
 - Multi-container orchestration with Docker Compose
-- CI/CD with automated integration testing
+- CI/CD with quality gates (ruff, black, mypy) and Testcontainers integration tests
 - 12-factor configuration and secrets management
+- Documented system-design tradeoffs ([`docs/DESIGN.md`](docs/DESIGN.md))
 
 ---
 

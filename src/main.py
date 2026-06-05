@@ -114,8 +114,11 @@ async def startup_event():
             )
             await asyncio.sleep(3)
     else:
-        # If it fails all 10 times, we purposefully crash the server so it doesn't fail silently
-        raise Exception("Fatal Error: Could not connect to Kafka after 30 seconds.")
+        # Boot anyway: leave kafka_producer as None so /readiness reports "down"
+        # (503) and create_charge returns 503, instead of crash-looping. Traffic is
+        # held by the readiness probe until Kafka recovers.
+        kafka_producer = None
+        log.error("kafka_connect_failed", attempts=10)
 
 
 @app.on_event("shutdown")
