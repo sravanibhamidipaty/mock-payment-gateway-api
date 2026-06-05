@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime
 from sqlalchemy.sql import func
 from database import Base
 
+
 class Charge(Base):
     __tablename__ = "charges"
 
@@ -16,5 +17,5 @@ class Charge(Base):
     currency = Column(String(3), nullable=False)
     user_id = Column(Integer, index=True, nullable=False)
 
-    #The auto-generating timestamp
+    # The auto-generating timestamp
     created_at = Column(DateTime(timezone=True), server_default=func.now())

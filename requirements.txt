@@ -25,3 +25,7 @@ pytest-asyncio
 redis
 aiokafka
 aioboto3
+ruff
+black
+mypy
+pytest-cov

@@ -59,8 +59,10 @@ async def startup_event():
             await kafka_producer.start()
             print("--- Successfully connected to the Kafka Conveyor Belt!")
             break  # If successful, break out of the loop!
-        except Exception as e:
-            print(f"--- Kafka not ready yet (Attempt {attempt + 1}/10). Waiting 3 seconds...")
+        except Exception:
+            print(
+                f"--- Kafka not ready yet (Attempt {attempt + 1}/10). Waiting 3 seconds..."
+            )
             await asyncio.sleep(3)
     else:
         # If it fails all 10 times, we purposefully crash the server so it doesn't fail silently
@@ -108,6 +110,11 @@ async def create_charge(
 
     # 2. Drop the box onto the Conveyor Belt! (Topic name: 'payments')
     # We have to encode the string into bytes before putting it on the belt
+    if kafka_producer is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Kafka producer is not ready yet.",
+        )
     await kafka_producer.send_and_wait(
         "payments", json.dumps(payment_box).encode("utf-8")
     )

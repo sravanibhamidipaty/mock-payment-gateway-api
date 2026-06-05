@@ -24,6 +24,7 @@ AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 # This is the Base class that our models.py inherited from!
 Base = declarative_base()
 
+
 # A helpful dependency function we will use in main.py to get a database session
 async def get_db():
     async with AsyncSessionLocal() as session:

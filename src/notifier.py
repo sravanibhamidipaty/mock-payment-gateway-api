@@ -7,9 +7,10 @@ from dotenv import load_dotenv
 load_dotenv()
 app = FastAPI(title="Notification Service")
 
-SENDER_EMAIL = os.getenv("SENDER_EMAIL")
-APP_PASSWORD = os.getenv("APP_PASSWORD")
-RECEIVER_EMAIL = os.getenv("RECEIVER_EMAIL")
+# os.environ[...] returns a guaranteed str and fails fast if the var is missing.
+SENDER_EMAIL = os.environ["SENDER_EMAIL"]
+APP_PASSWORD = os.environ["APP_PASSWORD"]
+RECEIVER_EMAIL = os.environ["RECEIVER_EMAIL"]
 
 
 @app.post("/webhook")

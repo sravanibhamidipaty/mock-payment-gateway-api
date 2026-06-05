@@ -12,6 +12,7 @@ load_dotenv()
 # so no real credentials are hardcoded in the test suite.
 API_KEY = os.environ["API_KEY_SECRET"]
 
+
 @pytest.fixture(autouse=True)
 def mock_external_services():
     """
@@ -27,6 +28,7 @@ def mock_external_services():
         # Tell the fake Redis that the key is NEVER a duplicate
         mock_get.return_value = None
         yield
+
 
 # ==========================================
 # TEST 1: The Missing Key (Front Gate 422)
@@ -64,9 +66,7 @@ async def test_vip_pass_succeeds():
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as ac:
-        response = await ac.get(
-            "/users/999/charges", headers={"x-api-key": API_KEY}
-        )
+        response = await ac.get("/users/999/charges", headers={"x-api-key": API_KEY})
 
     assert response.status_code == 200
 

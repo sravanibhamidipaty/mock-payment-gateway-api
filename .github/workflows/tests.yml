@@ -66,7 +66,7 @@ jobs:
           import asyncio
           from database import engine, Base
           import models
-          
+
           async def setup_db():
               async with engine.begin() as conn:
                   await conn.run_sync(Base.metadata.create_all)
@@ -79,4 +79,28 @@ jobs:
         env:
           API_KEY_SECRET: ${{ secrets.API_KEY_SECRET }}
           DATABASE_URL: postgresql+asyncpg://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@localhost:5432/${{ secrets.POSTGRES_DB }}
-        run: pytest
+        run: pytest --cov=src --cov-report=term-missing --cov-report=xml
+
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dev tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff black mypy
+
+      - name: Ruff (lint)
+        run: ruff check src tests
+
+      - name: Black (format check)
+        run: black --check src tests
+
+      - name: Mypy (type check)
+        run: mypy src
