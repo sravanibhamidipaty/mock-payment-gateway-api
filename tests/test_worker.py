@@ -1,7 +1,9 @@
+import asyncio
+
 import pytest
 from unittest.mock import AsyncMock, patch
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 import models
@@ -25,6 +27,18 @@ async def test_worker_persists_charge_and_fires_webhook():
         # testcontainers hands back a sync (psycopg2) URL; convert to async.
         url = pg.get_connection_url().replace("psycopg2", "asyncpg")
         engine = create_async_engine(url)
+
+        # The container's port is open before Postgres fully accepts connections,
+        # so retry briefly to keep this test from flaking on cold starts.
+        for attempt in range(10):
+            try:
+                async with engine.connect() as conn:
+                    await conn.execute(text("SELECT 1"))
+                break
+            except Exception:
+                if attempt == 9:
+                    raise
+                await asyncio.sleep(1)
 
         # Create the schema
         async with engine.begin() as conn:

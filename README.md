@@ -197,16 +197,20 @@ cp .env.example .env   # then fill in your values
 docker compose up --build
 ```
 
-This spins up **six services**: API, PostgreSQL, Redis, Kafka, the background worker, and the notifier.
+This spins up the full stack: API, PostgreSQL, Redis, Kafka, the background worker, the notifier, plus **Prometheus + Grafana** for monitoring.
 
 | Service | URL / Port |
 |---------|-----------|
 | API | http://localhost:8000 |
 | Swagger UI | http://localhost:8000/docs |
 | Notifier | http://localhost:8001 |
+| Grafana | http://localhost:3000 |
+| Prometheus | http://localhost:9090 |
 | PostgreSQL | `localhost:5433` |
 | Redis | `localhost:6379` |
 | Kafka | `localhost:9092` |
+
+> If port 3000 is already in use, start Grafana on another port: `GRAFANA_PORT=3001 docker compose up`.
 
 ---
 
@@ -299,6 +303,12 @@ Example `/readiness` response when a dependency is down:
 
 Logs are emitted as structured JSON via [`structlog`](https://www.structlog.org/), so they're ready to ship to any log aggregator (Datadog, Loki, CloudWatch) without parsing.
 
+### Prometheus + Grafana
+
+`docker compose up` also starts a **Prometheus** instance that scrapes `/metrics` and a **Grafana** instance pre-provisioned with a dashboard (request rate, latency p50/p95/p99, status codes, per-endpoint throughput). Open Grafana at **http://localhost:3000** → *Dashboards → "Payment Gateway API"* — no login required.
+
+![Grafana dashboard](docs/images/grafana-dashboard.png)
+
 ---
 
 ## ⚙️ Configuration
@@ -353,9 +363,12 @@ The suite combines fast hermetic unit tests (`pytest-asyncio` + `httpx` ASGI tra
 │   └── test_worker_unit.py # Retry/backoff + DLQ unit tests
 ├── docs/
 │   └── DESIGN.md          # Architecture decisions & tradeoffs
+├── monitoring/
+│   ├── prometheus.yml     # Prometheus scrape config
+│   └── grafana/           # Provisioned datasource + dashboard
 ├── .github/workflows/
 │   └── tests.yml          # CI: tests + coverage + lint/format/type-check
-├── docker-compose.yml     # 6-service orchestration
+├── docker-compose.yml     # full stack + monitoring orchestration
 ├── Dockerfile
 ├── requirements.txt
 └── .env.example

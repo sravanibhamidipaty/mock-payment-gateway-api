@@ -107,3 +107,29 @@ services:
       - SENDER_EMAIL=${SENDER_EMAIL}
       - APP_PASSWORD=${APP_PASSWORD}
       - RECEIVER_EMAIL=${RECEIVER_EMAIL}
+
+  # Box 6: Prometheus — scrapes the API's /metrics endpoint and stores the time series
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - api
+
+  # Box 7: Grafana — visualizes the Prometheus data on a pre-provisioned dashboard
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      # Override with GRAFANA_PORT in .env if 3000 is taken (e.g. another Grafana)
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      # Anonymous viewing so the dashboard opens with no login (demo-friendly)
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
